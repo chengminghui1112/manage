@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抽签管理后台</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: var(--background);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        button, .file-input {
+            background: var(--secondary-color);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        button:hover, .file-input:hover {
+            opacity: 0.9;
+        }
+
+        .file-input input {
+            display: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        tr:hover {
+            background: #f5f6fa;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .available { background: #e8f5e9; color: #2e7d32; }
+        .assigned { background: #fff3e0; color: #ef6c00; }
+
+        .alert {
+            padding: 12px;
+            margin: 1rem 0;
+            border-radius: 6px;
+        }
+        .success { background: #e8f5e9; border: 1px solid #81c784; }
+        .warning { background: #fff3e0; border: 1px solid #ffb74d; }
+        .error { background: #ffebee; border: 1px solid #ef9a9a; }
+
+        .import-result {
+            margin: 1rem 0;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        .duplicate-list {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: #fffde7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>抽签管理后台</h1>
+        
+        <div class="toolbar">
+            <button onclick="refreshData()">🔄 刷新数据</button>
+            <label class="file-input">
+                📥 导入CSV
+                <input type="file" id="fileInput" accept=".csv">
+            </label>
+            <button onclick="exportData()">📤 导出数据</button>
+        </div>
+
+        <div id="importResult"></div>
+
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>乡镇</th>
+                    <th>客户姓名</th>
+                    <th>状态</th>
+                    <th>施工队</th>
+                    <th>抽签时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://nrniqezsarwgmygsxkez.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ybmlxZXpzYXJ3Z215Z3N4a2V6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk1MDI2NDEsImV4cCI6MjA1NTA3ODY0MX0.JlASgEk76qVqYmRlwRNTSP-CAhR8OS2vv9t19RGT76w';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadData();
+    setupFileInput();
+});
+
+async function loadData() {
+    const { data, error } = await supabase
+        .from('households')
+        .select(`
+            town,
+            name,
+            is_drawn,
+            draw_results ( team, drawn_at )
+        `)
+        .order('town', { ascending: true })
+        .order('name', { ascending: true });
+
+    if(error) return console.error(error);
+
+    const tbody = document.querySelector('#dataTable tbody');
+    tbody.innerHTML = data.map(item => {
+        const result = item.draw_results[0] || {};
+        return `
+        <tr>
+            <td>${item.town}</td>
+            <td>${item.name}</td>
+            <td><span class="status ${item.is_drawn ? 'assigned' : 'available'}">
+                ${item.is_drawn ? '已抽签' : '未抽签'}
+            </span></td>
+            <td>${result.team || '-'}</td>
+            <td>${result.drawn_at ? new Date(result.drawn_at).toLocaleString() : '-'}</td>
+            <td>
+                ${item.is_drawn ? `
+                    <button onclick="resetStatus('${item.town}', '${item.name}')">重置</button>
+                ` : '-'}
+            </td>
+        </tr>`
+    }).join('');
+}
+
+async function resetStatus(town, name) {
+    if (!confirm(`确定要重置 ${town} - ${name} 的状态吗？`)) return;
+    
+    try {
+        await supabase
+            .from('draw_results')
+            .delete()
+            .match({ town, name });
+
+        await supabase
+            .from('households')
+            .update({ is_drawn: false })
+            .match({ town, name });
+
+        showAlert('状态重置成功', 'success');
+        refreshData();
+    } catch (error) {
+        showAlert(`重置失败：${error.message}`, 'error');
+    }
+}
+
+function setupFileInput() {
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            showAlert('只支持CSV格式文件', 'error');
+            return;
+        }
+
+        try {
+            const text = await readFileAsUTF8(file);
+            const { header, rows } = parseCSV(text);
+            const existingData = await getExistingData();
+            
+            const result = await processImport(rows, existingData);
+            showImportResult(result);
+            refreshData();
+        } catch (error) {
+            showAlert(`导入失败：${error.message}`, 'error');
+        }
+    });
+}
+
+async function getExistingData() {
+    const { data } = await supabase
+        .from('households')
+        .select('town,name');
+    return new Set(data.map(item => `${item.town}|${item.name}`));
+}
+
+async function processImport(rows, existingKeys) {
+    const result = {
+        total: rows.length,
+        success: 0,
+        duplicates: 0,
+        errors: 0,
+        duplicateRows: [],
+        errorDetails: []
+    };
+
+    const validRows = [];
+    rows.forEach((row, index) => {
+        const rowKey = `${row.town}|${row.name}`;
+        if (!row.town || !row.name) {
+            result.errors++;
+            result.errorDetails.push(`第${index+2}行数据不完整`);
+        } else if (existingKeys.has(rowKey)) {
+            result.duplicates++;
+            result.duplicateRows.push(index + 2);
+        } else {
+            validRows.push(row);
+            existingKeys.add(rowKey);
+        }
+    });
+
+    // 批量插入有效数据
+    const batchSize = 100;
+    for (let i = 0; i < validRows.length; i += batchSize) {
+        const batch = validRows.slice(i, i + batchSize);
+        const { error } = await supabase
+            .from('households')
+            .insert(batch);
+
+        if (error) {
+            result.errors += batch.length;
+            result.errorDetails.push(`第${i+1}-${i+batch.length}行插入失败: ${error.message}`);
+        } else {
+            result.success += batch.length;
+        }
+    }
+
+    return result;
+}
+
+function showImportResult(result) {
+    let statusClass = 'success';
+    if (result.errors > 0) statusClass = 'error';
+    else if (result.duplicates > 0) statusClass = 'warning';
+
+    const html = `
+        <div class="import-result ${statusClass}">
+            <h3>导入结果：</h3>
+            <div>📊 总数据量：${result.total}</div>
+            <div>✅ 成功导入：${result.success}</div>
+            <div>⚠️ 跳过重复：${result.duplicates}</div>
+            <div>❌ 失败数量：${result.errors}</div>
+            
+            ${result.duplicateRows.length > 0 ? `
+                <div class="duplicate-list">
+                    <div>重复行号：${result.duplicateRows.join(', ')}</div>
+                    <small>（行号从CSV文件标题行后开始计算）</small>
+                </div>
+            ` : ''}
+            
+            ${result.errorDetails.length > 0 ? `
+                <div class="error-details">
+                    ${result.errorDetails.map(d => `<div>${d}</div>`).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    document.getElementById('importResult').innerHTML = html;
+}
+
+async function exportData() {
+    const { data } = await supabase
+        .from('households')
+        .select(`
+            town,
+            name,
+            is_drawn,
+            draw_results ( team, drawn_at )
+        `)
+        .order('town', { ascending: true });
+
+    const csvContent = [
+        ['town', 'name', 'status', 'team', 'drawn_at'].join(','),
+        ...data.map(item => {
+            const result = item.draw_results[0] || {};
+            return [
+                `"${item.town}"`,
+                `"${item.name}"`,
+                `"${item.is_drawn ? '已抽签' : '未抽签'}"`,
+                `"${result.team || ''}"`,
+                `"${result.drawn_at || ''}"`
+            ].join(',');
+        })
+    ].join('\n');
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `光伏数据_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert ${type}`;
+    alertDiv.textContent = message;
+    document.getElementById('importResult').prepend(alertDiv);
+    setTimeout(() => alertDiv.remove(), 5000);
+}
+
+function readFileAsUTF8(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            let text = e.target.result.replace(/^\uFEFF/, '');
+            resolve(text);
+        };
+        reader.onerror = () => reject(new Error('文件读取失败'));
+        reader.readAsText(file, 'UTF-8');
+    });
+}
+
+function parseCSV(text) {
+    const rows = text.split('\n').filter(row => row.trim() !== '');
+    const header = rows[0].split(',').map(h => h.trim().toLowerCase());
+    return {
+        header,
+        rows: rows.slice(1).map((row, index) => {
+            const cells = row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+                .map(c => c.trim().replace(/^"(.*)"$/, '$1'));
+            return {
+                town: cells[0] || '',
+                name: cells[1] || '',
+                is_drawn: false
+            };
+        })
+    };
+}
+
+function refreshData() {
+    loadData();
+}
+</script>
+</body>
+</html>
