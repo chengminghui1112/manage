@@ -3,30 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>抽签管理后台</title>
+    <title>光伏项目管理系统</title>
     <style>
         :root {
             --primary-color: #2c3e50;
             --secondary-color: #3498db;
+            --danger-color: #e74c3c;
             --background: #f8f9fa;
+            --text-color: #2c3e50;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
+            font-family: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
             background: var(--background);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 2rem;
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 2px solid #eee;
         }
 
         .toolbar {
             display: flex;
             gap: 1rem;
-            margin-bottom: 2rem;
             flex-wrap: wrap;
         }
 
@@ -48,15 +69,55 @@
             display: none;
         }
 
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid #ddd;
+            color: var(--text-color);
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
             background: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            min-width: 800px;
         }
 
         th, td {
-            padding: 12px;
+            padding: 1rem;
             text-align: left;
             border-bottom: 1px solid #eee;
         }
@@ -64,18 +125,87 @@
         th {
             background: var(--primary-color);
             color: white;
+            font-weight: 500;
         }
 
         tr:hover {
-            background: #f5f6fa;
+            background: #f8f9fa;
         }
 
         .status {
             display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.9em;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
         }
+
+        .status.available {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status.assigned {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 800px;
+            width: 95%;
+            max-height: 80vh;
+            overflow: auto;
+            display: none;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .modal-close {
+            cursor: pointer;
+            padding: 0.5rem;
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            .container {
+                padding: 1.5rem;
+            }
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
         .available { background: #e8f5e9; color: #2e7d32; }
         .assigned { background: #fff3e0; color: #ef6c00; }
 
@@ -98,37 +228,80 @@
             padding: 0.5rem;
             background: #fffde7;
         }
+.alert {
+  padding: 12px;
+  margin: 1rem 0;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>抽签管理后台</h1>
-        
-        <div class="toolbar">
-            <button onclick="refreshData()">🔄 刷新数据</button>
+        <div class="header">
+            <h1>光伏项目管理后台</h1>
+            <div class="toolbar">
+                <button class="btn btn-primary" onclick="refreshData()">🔄 刷新</button>
             <label class="file-input">
                 📥 导入CSV
                 <input type="file" id="fileInput" accept=".csv">
-            </label>
-            <button onclick="exportData()">📤 导出数据</button>
+                </label>
+                <button class="btn btn-primary" onclick="exportData()">📤 导出数据</button>
+                <button class="btn btn-ghost" onclick="showDeleteLogs()">🗑️ 删除记录</button>
+            </div>
         </div>
+
+        <div class="table-container">
 
         <div id="importResult"></div>
 
-        <table id="dataTable">
-            <thead>
-                <tr>
-                    <th>乡镇</th>
-                    <th>客户姓名</th>
-                    <th>状态</th>
-                    <th>施工队</th>
-                    <th>抽签时间</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>乡镇</th>
+                        <th>客户姓名</th>
+                        <th>状态</th>
+                        <th>施工队</th>
+                        <th>抽签时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
+
+    <!-- 删除记录弹窗 -->
+    <div class="modal" id="deleteLogModal">
+        <div class="modal-header">
+            <h3>删除记录查询</h3>
+            <span class="modal-close" onclick="closeModal()">×</span>
+        </div>
+        <div class="modal-body">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>删除时间</th>
+                            <th>操作人员</th>
+                            <th>乡镇</th>
+                            <th>客户姓名</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deleteLogContent"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="modalOverlay" onclick="closeModal()"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -137,66 +310,11 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// 初始化
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
     setupFileInput();
 });
-
-async function loadData() {
-    const { data, error } = await supabase
-        .from('households')
-        .select(`
-            town,
-            name,
-            is_drawn,
-            draw_results ( team, drawn_at )
-        `)
-        .order('town', { ascending: true })
-        .order('name', { ascending: true });
-
-    if(error) return console.error(error);
-
-    const tbody = document.querySelector('#dataTable tbody');
-    tbody.innerHTML = data.map(item => {
-        const result = item.draw_results[0] || {};
-        return `
-        <tr>
-            <td>${item.town}</td>
-            <td>${item.name}</td>
-            <td><span class="status ${item.is_drawn ? 'assigned' : 'available'}">
-                ${item.is_drawn ? '已抽签' : '未抽签'}
-            </span></td>
-            <td>${result.team || '-'}</td>
-            <td>${result.drawn_at ? new Date(result.drawn_at).toLocaleString() : '-'}</td>
-            <td>
-                ${item.is_drawn ? `
-                    <button onclick="resetStatus('${item.town}', '${item.name}')">重置</button>
-                ` : '-'}
-            </td>
-        </tr>`
-    }).join('');
-}
-
-async function resetStatus(town, name) {
-    if (!confirm(`确定要重置 ${town} - ${name} 的状态吗？`)) return;
-    
-    try {
-        await supabase
-            .from('draw_results')
-            .delete()
-            .match({ town, name });
-
-        await supabase
-            .from('households')
-            .update({ is_drawn: false })
-            .match({ town, name });
-
-        showAlert('状态重置成功', 'success');
-        refreshData();
-    } catch (error) {
-        showAlert(`重置失败：${error.message}`, 'error');
-    }
-}
 
 function setupFileInput() {
     document.getElementById('fileInput').addEventListener('change', async (e) => {
@@ -303,44 +421,195 @@ function showImportResult(result) {
     document.getElementById('importResult').innerHTML = html;
 }
 
-async function exportData() {
-    const { data } = await supabase
-        .from('households')
-        .select(`
-            town,
-            name,
-            is_drawn,
-            draw_results ( team, drawn_at )
-        `)
-        .order('town', { ascending: true });
+async function loadData() {
+    try {
+        const { data, error } = await supabase
+            .from('households')
+            .select(`
+                town,
+                name,
+                is_drawn,
+                draw_results ( team, drawn_at )
+            `)
+            .order('town', { ascending: true })
+            .order('name', { ascending: true });
 
-    const csvContent = [
-        ['town', 'name', 'status', 'team', 'drawn_at'].join(','),
-        ...data.map(item => {
+    if(error) return console.error(error);
+
+        const tbody = document.querySelector('#dataTable tbody');
+        tbody.innerHTML = data.map(item => {
             const result = item.draw_results[0] || {};
-            return [
-                `"${item.town}"`,
-                `"${item.name}"`,
-                `"${item.is_drawn ? '已抽签' : '未抽签'}"`,
-                `"${result.team || ''}"`,
-                `"${result.drawn_at || ''}"`
-            ].join(',');
-        })
-    ].join('\n');
-
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `光伏数据_${new Date().toISOString().slice(0,10)}.csv`;
-    link.click();
+            return `
+            <tr>
+                <td>${item.town}</td>
+                <td>${item.name}</td>
+                <td><span class="status ${item.is_drawn ? 'assigned' : 'available'}">
+                    ${item.is_drawn ? '已抽签' : '未抽签'}
+                </span></td>
+                <td>${result.team || '-'}</td>
+                <td>${result.drawn_at ? new Date(result.drawn_at).toLocaleString() : '-'}</td>
+                <td>
+                    <button class="btn btn-ghost" onclick="resetStatus('${item.town}', '${item.name}')">重置</button>
+                    <button class="btn btn-danger" onclick="deleteHousehold('${item.town}', '${item.name}')">删除</button>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (error) {
+        console.error('数据加载失败:', error);
+        alert('数据加载失败，请刷新重试');
+    }
 }
 
-function showAlert(message, type) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert ${type}`;
-    alertDiv.textContent = message;
-    document.getElementById('importResult').prepend(alertDiv);
-    setTimeout(() => alertDiv.remove(), 5000);
+async function resetStatus(town, name) {
+  try {
+    // 1. 获取当前状态
+    const { data: current } = await supabase
+      .from('households')
+      .select('is_drawn')
+      .match({ town, name })
+      .single();
+
+    if (!current) throw new Error('找不到该记录');
+    
+    // 2. 切换状态
+    const newStatus = !current.is_drawn;
+    
+    // 3. 更新状态
+    const { error: updateError } = await supabase
+      .from('households')
+      .update({ is_drawn: newStatus })
+      .match({ town, name });
+
+    if (updateError) throw updateError;
+
+    // 4. 状态变更为未抽签时删除记录
+    if (!newStatus) {
+      await supabase
+        .from('draw_results')
+        .delete()
+        .match({ town, name });
+    }
+
+    // 5. 刷新数据
+    refreshData();
+    showAlert(`状态已切换为：${newStatus ? '已抽签' : '未抽签'}`, 'success');
+    
+  } catch (error) {
+    console.error('状态切换失败:', error);
+    showAlert(`操作失败：${error.message}`, 'error');
+  }
+}
+async function deleteHousehold(town, name) {
+    if (!confirm(`确定要永久删除 ${town} - ${name} 吗？此操作不可逆！`)) return;
+
+    try {
+        await supabase
+            .from('draw_results')
+            .delete()
+            .match({ town, name });
+
+        const { error } = await supabase
+            .from('households')
+            .delete()
+            .match({ town, name });
+
+        if (error) throw error;
+
+        await logDeletion(town, name);
+        alert('删除成功');
+        refreshData();
+    } catch (error) {
+        console.error('删除失败:', error);
+        alert('删除操作失败');
+    }
+}
+
+async function logDeletion(town, name) {
+    await supabase
+        .from('delete_logs')
+        .insert({
+            operator: '系统管理员',
+            town,
+            name
+        });
+}
+
+async function showDeleteLogs() {
+    try {
+        const { data } = await supabase
+            .from('delete_logs')
+            .select('*')
+            .order('deleted_at', { ascending: false });
+
+        const content = data.map(log => `
+            <tr>
+                <td>${new Date(log.deleted_at).toLocaleString()}</td>
+                <td>${log.operator}</td>
+                <td>${log.town}</td>
+                <td>${log.name}</td>
+            </tr>
+        `).join('');
+
+        document.getElementById('deleteLogContent').innerHTML = content;
+        document.getElementById('deleteLogModal').style.display = 'block';
+        document.getElementById('modalOverlay').style.display = 'block';
+    } catch (error) {
+        console.error('获取删除记录失败:', error);
+        alert('无法加载删除记录');
+    }
+}
+
+function closeModal() {
+    document.getElementById('deleteLogModal').style.display = 'none';
+    document.getElementById('modalOverlay').style.display = 'none';
+}
+
+async function exportData() {
+    try {
+        const { data } = await supabase
+            .from('households')
+            .select(`
+                town,
+                name,
+                is_drawn,
+                draw_results ( team, drawn_at )
+            `)
+            .order('town', { ascending: true });
+
+        const csvContent = [
+            ['乡镇', '客户姓名', '状态', '施工队', '抽签时间'],
+            ...data.map(item => {
+                const result = item.draw_results[0] || {};
+                return [
+                    item.town,
+                    item.name,
+                    item.is_drawn ? '已抽签' : '未抽签',
+                    result.team || '',
+                    result.drawn_at ? new Date(result.drawn_at).toISOString() : ''
+                ];
+            })
+        ].map(row => row.join(',')).join('\n');
+
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `光伏数据_${new Date().toISOString().slice(0,10)}.csv`;
+        link.click();
+    } catch (error) {
+        console.error('导出失败:', error);
+        alert('数据导出失败');
+    }
+}
+
+function showAlert(message, type = 'info') {
+  const alertDiv = document.createElement('div');
+  alertDiv.className = `alert ${type}`;
+  alertDiv.innerHTML = `
+    <span>${message}</span>
+    <button onclick="this.parentElement.remove()">×</button>
+  `;
+  document.getElementById('importResult').prepend(alertDiv);
+  setTimeout(() => alertDiv.remove(), 3000);
 }
 
 function readFileAsUTF8(file) {
@@ -371,6 +640,7 @@ function parseCSV(text) {
         })
     };
 }
+
 
 function refreshData() {
     loadData();
