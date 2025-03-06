@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
-    <title>抽签管理系统</title>
+    <title>光伏项目管理系统</title>
     <style>
         :root {
             --primary-color: #2c3e50;
@@ -348,7 +348,7 @@
     
     <div class="container">
         <div class="header">
-            <h1>抽签管理后台</h1>
+            <h1>光伏项目管理后台</h1>
             <div class="toolbar">
                 <button class="btn btn-primary" onclick="refreshData()">🔄 刷新数据</button>
                 <label class="btn btn-primary">
@@ -610,83 +610,107 @@ function showImportResult(result) {
         }
     }
 
-    // 删除记录
-    async function deleteHousehold(town, name) {
-        if (!confirm(`确定要永久删除 ${town} - ${name} 吗？此操作不可逆！`)) return;
+// 添加数据验证函数
+async function validateDeletionLogs() {
+    const { data } = await supabase
+        .from('delete_logs')
+        .select('team')
+        .not('team', 'is', null)
+        .limit(1);
 
-        try {
-            showLoading();
-            await supabase
-                .from('draw_results')
-                .delete()
-                .match({ town, name });
-
-            const { error } = await supabase
-                .from('households')
-                .delete()
-                .match({ town, name });
-
-            if (error) throw error;
-
-            await logDeletion(town, name);
-            showAlert('删除成功', 'success');
-            await refreshData();
-        } catch (error) {
-            console.error('删除失败:', error);
-            showAlert('删除操作失败', 'error');
-        } finally {
-            hideLoading();
-        }
+    if (data.length > 0) {
+        console.log('施工队字段验证通过', data[0]);
+    } else {
+        console.log('暂无包含施工队的删除记录');
     }
+}
+// 在页面加载时执行
+document.addEventListener('DOMContentLoaded', validateDeletionLogs);
 
-    // 修改日志记录函数（在删除时保存施工队信息）
-    async function logDeletion(town, name) {
-        // 先获取当前施工队信息
-        const { data } = await supabase
+console.log('施工队信息:', {
+    town, 
+    name,
+    team: currentTeam?.team 
+});
+
+// 在删除函数中添加验证
+async function deleteHousehold(town, name) {
+    if (!confirm(`确定要永久删除 ${town} - ${name} 吗？此操作不可逆！`)) return;
+
+    try {
+        showLoading();
+        
+        // 1. 获取当前施工队信息
+        const { data: currentTeam } = await supabase
             .from('draw_results')
             .select('team')
             .match({ town, name })
-            .single();
+            .maybeSingle();
 
+        // 2. 删除关联记录
+        await supabase
+            .from('draw_results')
+            .delete()
+            .match({ town, name });
+
+        // 3. 删除主体记录
+        const { error } = await supabase
+            .from('households')
+            .delete()
+            .match({ town, name });
+
+        if (error) throw error;
+
+        // 4. 记录日志（包含施工队信息）
         await supabase
             .from('delete_logs')
             .insert({
                 operator: '系统管理员',
                 town,
                 name,
-                team: data?.team || ''  // 新增施工队字段
+                team: currentTeam?.team || null
             });
+
+        showAlert('删除成功', 'success');
+        await refreshData();
+    } catch (error) {
+        console.error('删除失败:', error);
+        showAlert(`删除失败：${error.message}`, 'error');
+    } finally {
+        hideLoading();
     }
+}
 
-    // 修改删除记录查询函数
-    async function showDeleteLogs() {
-        try {
-            showLoading();
-            const { data } = await supabase
-                .from('delete_logs')
-                .select('*')
-                .order('deleted_at', { ascending: false });
+async function showDeleteLogs() {
+    try {
+        showLoading();
+        const { data, error } = await supabase
+            .from('delete_logs')
+            .select('deleted_at, operator, town, name, team')
+            .order('deleted_at', { ascending: false });
 
-            const content = data.map(log => `
-                <tr>
-                    <td>${new Date(log.deleted_at).toLocaleString()}</td>
-                    <td>${escapeHTML(log.operator)}</td>
-                    <td>${escapeHTML(log.town)}</td>
-                    <td>${escapeHTML(log.name)}</td>
-                    <td>${escapeHTML(log.team || '-')}</td> <!-- 新增施工队显示 -->
-                </tr>
-            `).join('');
+        if (error) throw error;
 
-            document.getElementById('deleteLogContent').innerHTML = content;
-            document.getElementById('deleteLogModal').style.display = 'block';
-            document.getElementById('modalOverlay').style.display = 'block';
-        } catch (error) {
-            console.error('获取删除记录失败:', error);
-            showAlert('无法加载删除记录', 'error');
-        } finally {
-            hideLoading();
-        }
+        const content = data.map(log => `
+            <tr>
+                <td>${new Date(log.deleted_at).toLocaleString()}</td>
+                <td>${escapeHTML(log.operator)}</td>
+                <td>${escapeHTML(log.town)}</td>
+                <td>${escapeHTML(log.name)}</td>
+                <td>${log.team ? escapeHTML(log.team) : '无记录'}</td>
+            </tr>
+        `).join('');
+
+        document.getElementById('deleteLogContent').innerHTML = content;
+        document.getElementById('deleteLogModal').style.display = 'block';
+        document.getElementById('modalOverlay').style.display = 'block';
+    } catch (error) {
+        console.error('获取删除记录失败:', error);
+        showAlert('无法加载删除记录', 'error');
+    } finally {
+        hideLoading();
     }
+}
 
     // 模态框控制
     function closeModal() {
