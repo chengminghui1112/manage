@@ -224,6 +224,30 @@
             padding: 0.5rem 0.75rem;
         }
 
+        /* 新增修改相关样式 */
+        #editTeamModal {
+            max-width: 500px;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            border-color: var(--secondary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
         @media (max-width: 768px) {
             body {
                 padding: 0.5rem;
@@ -251,16 +275,6 @@
             }
         }
 
-        @media (min-resolution: 192dpi) {
-            .modal {
-                border-width: 0.5px;
-            }
-
-            .btn {
-                border-width: 1.5px;
-            }
-        }
-
         .alert {
             padding: 0.8rem 1rem;
             margin: 1rem 0;
@@ -270,11 +284,6 @@
             align-items: center;
             animation: slideIn 0.3s ease-out;
             font-size: 0.95rem;
-        }
-
-        @keyframes slideIn {
-            from { transform: translateY(-20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
         }
 
         .success { 
@@ -315,32 +324,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        /* 新增施工队列样式 */
-        .delete-log-table th:nth-child(4),
-        .delete-log-table td:nth-child(4) {
-            min-width: 120px;
-            max-width: 180px;
-        }
-
-        /* 调整表格列宽 */
-        .delete-log-table th:nth-child(1) { min-width: 160px; }  /* 删除时间 */
-        .delete-log-table th:nth-child(3) { min-width: 100px; }  /* 乡镇 */
-        .delete-log-table th:nth-child(4) { min-width: 120px; }  /* 客户姓名 */
-        .delete-log-table th:nth-child(5) { min-width: 100px; }  /* 施工队 */
-
-        /* 提升表格可读性 */
-        .delete-log-table td {
-            padding: 0.8rem 1rem;
-            font-size: 0.9rem;
-            color: #666;
-        }
-
-        .delete-log-table th {
-            background: #2c3e50;
-            color: white;
-            font-weight: 500;
-            padding: 0.9rem 1rem;
-        }
     </style>
 </head>
 <body>
@@ -370,7 +353,7 @@
                         <th>状态</th>
                         <th>施工队</th>
                         <th>抽签时间</th>
-                        <th style="min-width: 150px;">操作</th>
+                        <th style="min-width: 180px;">操作</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -378,7 +361,7 @@
         </div>
     </div>
 
-    <!-- 修改删除记录弹窗 -->
+    <!-- 删除记录弹窗 -->
     <div class="modal" id="deleteLogModal">
         <div class="modal-header">
             <h3>删除记录查询</h3>
@@ -393,7 +376,7 @@
                             <th>操作人员</th>
                             <th>乡镇</th>
                             <th>客户姓名</th>
-                            <th>施工队</th> <!-- 新增施工队列 -->
+                            <th>施工队</th>
                         </tr>
                     </thead>
                     <tbody id="deleteLogContent"></tbody>
@@ -401,27 +384,59 @@
             </div>
         </div>
     </div>
+
+    <!-- 修改施工队弹窗 -->
+    <div class="modal" id="editTeamModal">
+        <div class="modal-header">
+            <h3>修改施工队信息</h3>
+            <span class="modal-close" onclick="closeModal()">×</span>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>当前施工队：</label>
+                <input type="text" id="currentTeam" class="form-input" disabled>
+            </div>
+            <div class="form-group">
+                <label>新施工队名称：</label>
+                <input type="text" id="newTeam" class="form-input" 
+                       placeholder="输入施工队名称" maxlength="50" required>
+            </div>
+            <button class="btn btn-primary" onclick="confirmUpdateTeam()">确认修改</button>
+        </div>
+    </div>
+
     <div class="overlay" id="modalOverlay" onclick="closeModal()"></div>
 
-<!-- 使用官方CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
     <script>
     const SUPABASE_URL = 'https://nrniqezsarwgmygsxkez.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ybmlxZXpzYXJ3Z215Z3N4a2V6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk1MDI2NDEsImV4cCI6MjA1NTA3ODY0MX0.JlASgEk76qVqYmRlwRNTSP-CAhR8OS2vv9t19RGT76w';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// 增强的Supabase客户端配置（修复API key问题）
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    db: {
+        schema: 'public'
+    },
+    auth: {
+        persistSession: false
+    },
+    global: {
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+    }
+});
 
-    // 加载状态控制
-    const showLoading = () => document.querySelector('.loading-overlay').style.display = 'flex';
-    const hideLoading = () => document.querySelector('.loading-overlay').style.display = 'none';
+    let currentEditRecord = { town: null, name: null };
 
-    document.addEventListener('DOMContentLoaded', () => {
-        loadData();
-        setupFileInput();
-    });
+// 在初始化时执行约束检查
+document.addEventListener('DOMContentLoaded', async () => {
+    await checkDatabaseConstraints();
+    loadData();
+    setupFileInput();
+});
 
+    // 文件处理
     // 文件输入处理
     function setupFileInput() {
         document.getElementById('fileInput').addEventListener('change', async (e) => {
@@ -544,40 +559,237 @@ function showImportResult(result) {
                     is_drawn,
                     draw_results ( team, drawn_at )
                 `)
-                .order('town', { ascending: true })
-                .order('name', { ascending: true });
+                .order('town')
+                .order('name');
 
             if (error) throw error;
 
-            const tbody = document.querySelector('#dataTable tbody');
-            tbody.innerHTML = data.map(item => {
-                const result = item.draw_results[0] || {};
-                return `
-                <tr>
-                    <td>${escapeHTML(item.town)}</td>
-                    <td>${escapeHTML(item.name)}</td>
-                    <td><span class="status ${item.is_drawn ? 'assigned' : 'available'}">
-                        ${item.is_drawn ? '已抽签' : '未抽签'}
-                    </span></td>
-                    <td>${escapeHTML(result.team || '-')}</td>
-                    <td>${result.drawn_at ? new Date(result.drawn_at).toLocaleString() : '-'}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn btn-ghost" onclick="resetStatus('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">重置</button>
-                            <button class="btn btn-danger" onclick="deleteHousehold('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">删除</button>
-                        </div>
-                    </td>
-                </tr>`;
-            }).join('');
+            renderTable(data);
         } catch (error) {
-            console.error('数据加载失败:', error);
-            showAlert('数据加载失败，请刷新重试', 'error');
+            handleError('数据加载', error);
         } finally {
             hideLoading();
         }
     }
 
-    // 重置状态
+    function renderTable(data) {
+        const tbody = document.querySelector('#dataTable tbody');
+        tbody.innerHTML = data.map(item => {
+            const result = item.draw_results[0] || {};
+            return `
+            <tr>
+                <td>${escapeHTML(item.town)}</td>
+                <td>${escapeHTML(item.name)}</td>
+                <td><span class="status ${item.is_drawn ? 'assigned' : 'available'}">
+                    ${item.is_drawn ? '已抽签' : '未抽签'}
+                </span></td>
+                <td>${escapeHTML(result.team || '-')}</td>
+                <td>${result.drawn_at ? new Date(result.drawn_at).toLocaleString() : '-'}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn btn-ghost" onclick="resetStatus('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">重置</button>
+                        <button class="btn btn-primary" onclick="showEditTeamModal('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">修改</button>
+                        <button class="btn btn-danger" onclick="deleteHousehold('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">删除</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    // 施工队修改功能
+    async function showEditTeamModal(town, name) {
+        currentEditRecord = { town, name };
+        try {
+            const { data } = await supabase
+                .from('draw_results')
+                .select('team')
+                .match({ town, name })
+                .maybeSingle();
+
+            document.getElementById('currentTeam').value = data?.team || '无记录';
+            document.getElementById('newTeam').value = '';
+            showModal('editTeamModal');
+        } catch (error) {
+            handleError('获取施工队信息', error);
+        }
+    }
+
+    async function confirmUpdateTeam() {
+        const newTeam = sanitizeInput(document.getElementById('newTeam').value.trim());
+        if (!validateTeamInput(newTeam)) return;
+
+        try {
+            showLoading();
+            await updateTeamRecord(newTeam);
+            await updateHouseholdStatus();
+            showAlert('施工队信息更新成功', 'success');
+            closeModal();
+            await refreshData();
+        } catch (error) {
+            handleError('修改施工队', error);
+        } finally {
+            hideLoading();
+        }
+    }
+
+// 修改施工队更新逻辑（修复唯一约束问题）
+async function updateTeamRecord(team) {
+    try {
+        // 先尝试插入或更新记录
+        const { error } = await supabase
+            .from('draw_results')
+            .upsert(
+                {
+                    town: currentEditRecord.town,
+                    name: currentEditRecord.name,
+                    team,
+                    drawn_at: new Date().toISOString()
+                },
+                { onConflict: 'town,name' }  // 确保数据库有(town,name)的唯一约束
+            );
+
+        if (error) {
+            // 如果upsert失败，尝试单独处理
+            const { data: existing } = await supabase
+                .from('draw_results')
+                .select()
+                .match(currentEditRecord)
+                .maybeSingle();
+
+            if (existing) {
+                // 更新现有记录
+                await supabase
+                    .from('draw_results')
+                    .update({ team })
+                    .match(currentEditRecord);
+            } else {
+                // 插入新记录
+                await supabase
+                    .from('draw_results')
+                    .insert({
+                        ...currentEditRecord,
+                        team,
+                        drawn_at: new Date().toISOString()
+                    });
+            }
+        }
+    } catch (error) {
+        console.error('施工队更新失败详情:', {
+            error,
+            record: currentEditRecord,
+            team
+        });
+        throw new Error('施工队信息更新失败，请检查数据格式');
+    }
+}
+
+    async function updateHouseholdStatus() {
+        const { error } = await supabase
+            .from('households')
+            .update({ is_drawn: true })
+            .match(currentEditRecord);
+
+        if (error) throw error;
+    }
+
+// 新增数据库约束检查函数
+async function checkDatabaseConstraints() {
+    try {
+        // 检查draw_results表是否存在主键约束
+        const { data } = await supabase
+            .rpc('check_constraint_exists', {
+                table_name: 'draw_results',
+                constraint_type: 'PRIMARY KEY'
+            });
+
+        if (!data) {
+            console.warn('检测到缺失主键约束，正在尝试修复...');
+            await supabase.rpc('add_primary_key', {
+                table_name: 'draw_results',
+                columns: ['town', 'name']
+            });
+            console.log('数据库约束修复完成');
+        }
+    } catch (error) {
+        console.error('数据库约束检查失败:', error);
+        showAlert('数据库配置异常，请联系管理员', 'error');
+    }
+}
+
+    // 辅助函数
+    function validateTeamInput(team) {
+        if (!team) {
+            showAlert('施工队名称不能为空', 'error');
+            return false;
+        }
+        if (team.length > 50) {
+            showAlert('名称不能超过50个字符', 'error');
+            return false;
+        }
+        return true;
+    }
+
+    function sanitizeInput(str) {
+        return str
+            .replace(/[<>"']/g, '');
+    }
+
+    // 删除记录功能
+    async function deleteHousehold(town, name) {
+        if (!confirm(`确定要永久删除 ${town} - ${name} 吗？此操作不可逆！`)) return;
+
+        try {
+            showLoading();
+            // 获取当前施工队信息
+            const { data: currentTeam } = await supabase
+                .from('draw_results')
+                .select('team')
+                .match({ town, name })
+                .maybeSingle();
+
+            // 删除关联记录
+            await supabase
+                .from('draw_results')
+                .delete()
+                .match({ town, name });
+
+            // 删除主体记录
+            const { error } = await supabase
+                .from('households')
+                .delete()
+                .match({ town, name });
+
+            if (error) throw error;
+
+            // 记录删除日志
+            await logDeletion(town, name, currentTeam?.team);
+            showAlert('删除成功', 'success');
+            await refreshData();
+        } catch (error) {
+            handleError('删除操作', error);
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // 删除日志记录
+    async function logDeletion(town, name, team) {
+        try {
+            await supabase
+                .from('delete_logs')
+                .insert({
+                    operator: '系统管理员',
+                    town,
+                    name,
+                    team: team || null,
+                    deleted_at: new Date().toISOString()
+                });
+        } catch (error) {
+            console.error('删除日志记录失败:', error);
+        }
+    }
+
+    // 状态重置功能
     async function resetStatus(town, name) {
         try {
             showLoading();
@@ -587,16 +799,15 @@ function showImportResult(result) {
                 .match({ town, name })
                 .single();
 
-            if (!current) throw new Error('找不到该记录');
             const newStatus = !current.is_drawn;
             
-            const { error: updateError } = await supabase
+            // 更新状态
+            await supabase
                 .from('households')
                 .update({ is_drawn: newStatus })
                 .match({ town, name });
 
-            if (updateError) throw updateError;
-
+            // 状态重置时清除施工队信息
             if (!newStatus) {
                 await supabase
                     .from('draw_results')
@@ -604,166 +815,56 @@ function showImportResult(result) {
                     .match({ town, name });
             }
 
-            await refreshData();
             showAlert(`状态已切换为：${newStatus ? '已抽签' : '未抽签'}`, 'success');
+            await refreshData();
         } catch (error) {
-            console.error('状态切换失败:', error);
-            showAlert(`操作失败：${error.message}`, 'error');
+            handleError('状态重置', error);
         } finally {
             hideLoading();
         }
     }
 
-// 添加数据验证函数
-async function validateDeletionLogs() {
-    const { data } = await supabase
-        .from('delete_logs')
-        .select('team')
-        .not('team', 'is', null)
-        .limit(1);
+    // 删除记录查询
+    async function showDeleteLogs() {
+        try {
+            showLoading();
+            const { data, error } = await supabase
+                .from('delete_logs')
+                .select('*')
+                .order('deleted_at', { ascending: false });
 
-    if (data.length > 0) {
-        console.log('施工队字段验证通过', data[0]);
-    } else {
-        console.log('暂无包含施工队的删除记录');
+            if (error) throw error;
+
+            renderDeleteLogs(data);
+            showModal('deleteLogModal');
+        } catch (error) {
+            handleError('获取删除记录', error);
+        } finally {
+            hideLoading();
+        }
     }
-}
-// 在页面加载时执行
-document.addEventListener('DOMContentLoaded', validateDeletionLogs);
 
-console.log('施工队信息:', {
-    town, 
-    name,
-    team: currentTeam?.team 
-});
-
-// 在删除函数中添加验证
-async function deleteHousehold(town, name) {
-    if (!confirm(`确定要永久删除 ${town} - ${name} 吗？此操作不可逆！`)) return;
-
-    try {
-        showLoading();
-        
-        // 1. 获取当前施工队信息
-        const { data: currentTeam } = await supabase
-            .from('draw_results')
-            .select('team')
-            .match({ town, name })
-            .maybeSingle();
-
-        // 2. 删除关联记录
-        await supabase
-            .from('draw_results')
-            .delete()
-            .match({ town, name });
-
-        // 3. 删除主体记录
-        const { error } = await supabase
-            .from('households')
-            .delete()
-            .match({ town, name });
-
-        if (error) throw error;
-
-        // 4. 记录日志（包含施工队信息）
-        await supabase
-            .from('delete_logs')
-            .insert({
-                operator: '系统管理员',
-                town,
-                name,
-                team: currentTeam?.team || null
-            });
-
-        showAlert('删除成功', 'success');
-        await refreshData();
-    } catch (error) {
-        console.error('删除失败:', error);
-        showAlert(`删除失败：${error.message}`, 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-async function showDeleteLogs() {
-    try {
-        showLoading();
-        const { data, error } = await supabase
-            .from('delete_logs')
-            .select('deleted_at, operator, town, name, team')
-            .order('deleted_at', { ascending: false });
-
-        if (error) throw error;
-
+    function renderDeleteLogs(data) {
         const content = data.map(log => `
             <tr>
                 <td>${new Date(log.deleted_at).toLocaleString()}</td>
                 <td>${escapeHTML(log.operator)}</td>
                 <td>${escapeHTML(log.town)}</td>
                 <td>${escapeHTML(log.name)}</td>
-                <td>${log.team ? escapeHTML(log.team) : '无记录'}</td>
+                <td>${log.team ? escapeHTML(log.team) : '无'}</td>
             </tr>
         `).join('');
-
         document.getElementById('deleteLogContent').innerHTML = content;
-        document.getElementById('deleteLogModal').style.display = 'block';
-        document.getElementById('modalOverlay').style.display = 'block';
-    } catch (error) {
-        console.error('获取删除记录失败:', error);
-        showAlert('无法加载删除记录', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-    // 模态框控制
-    function closeModal() {
-        document.getElementById('deleteLogModal').style.display = 'none';
-        document.getElementById('modalOverlay').style.display = 'none';
-    }
-
-    // 导出数据
-    async function exportData() {
-        try {
-            showLoading();
-            const { data } = await supabase
-                .from('households')
-                .select(`
-                    town,
-                    name,
-                    is_drawn,
-                    draw_results ( team, drawn_at )
-                `)
-                .order('town', { ascending: true });
-
-            const csvContent = [
-                ['乡镇', '客户姓名', '状态', '施工队', '抽签时间'],
-                ...data.map(item => {
-                    const result = item.draw_results[0] || {};
-                    return [
-                        `"${escapeCSV(item.town)}"`,
-                        `"${escapeCSV(item.name)}"`,
-                        item.is_drawn ? '已抽签' : '未抽签',
-                        result.team ? `"${escapeCSV(result.team)}"` : '',
-                        result.drawn_at ? new Date(result.drawn_at).toISOString() : ''
-                    ];
-                })
-            ].map(row => row.join(',')).join('\n');
-
-            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `光伏数据_${new Date().toISOString().slice(0,10)}.csv`;
-            link.click();
-        } catch (error) {
-            console.error('导出失败:', error);
-            showAlert('数据导出失败', 'error');
-        } finally {
-            hideLoading();
-        }
     }
 
     // 工具函数
+    function escapeHTML(str) {
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+    }
+
     function showAlert(message, type = 'info') {
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert ${type}`;
@@ -775,11 +876,16 @@ async function showDeleteLogs() {
         setTimeout(() => alertDiv.remove(), 3000);
     }
 
-    function escapeHTML(str) {
-        return str.replace(/&/g, '&amp;')
-                  .replace(/</g, '&lt;')
-                  .replace(/>/g, '&gt;')
-                  .replace(/"/g, '&quot;');
+    function showModal(modalId) {
+        document.getElementById(modalId).style.display = 'block';
+        document.getElementById('modalOverlay').style.display = 'block';
+    }
+
+    function closeModal() {
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.style.display = 'none';
+        });
+        document.getElementById('modalOverlay').style.display = 'none';
     }
 
     function escapeCSV(str) {
@@ -819,10 +925,23 @@ function parseCSV(text) {
     };
 }
 
+    function handleError(context, error) {
+        console.error(`${context}失败:`, error);
+        showAlert(`${context}失败：${error.message}`, 'error');
+    }
 
-function refreshData() {
-    loadData();
-}
+    const showLoading = () => document.querySelector('.loading-overlay').style.display = 'flex';
+    const hideLoading = () => document.querySelector('.loading-overlay').style.display = 'none';
+
+    async function refreshData() {
+        await loadData();
+    }
+
+    // 初始化事件监听
+    document.getElementById('modalOverlay').addEventListener('click', closeModal);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
 </script>
 </body>
 </html>
