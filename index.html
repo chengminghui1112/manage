@@ -324,25 +324,80 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+/* 新增搜索相关样式 */
+.search-group {
+    display: flex;
+    gap: 0.5rem;
+    flex-grow: 1;
+    max-width: 400px;
+}
+
+.search-input {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: border-color 0.3s;
+}
+
+.search-input:focus {
+    border-color: var(--secondary-color);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.operation-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+    .search-group {
+        width: 100%;
+        max-width: none;
+    }
+    
+    .operation-buttons {
+        width: 100%;
+    }
+    
+    .operation-buttons .btn {
+        flex: 1 1 45%;
+    }
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+    background: #f9f9f9;
+}
+}
     </style>
 </head>
 <body>
     <div class="loading-overlay"><div class="spinner"></div></div>
     
     <div class="container">
-        <div class="header">
-            <h1>抽签管理后台</h1>
-            <div class="toolbar">
-                <button class="btn btn-primary" onclick="refreshData()">🔄 刷新数据</button>
-                <label class="btn btn-primary">
-                    📥 导入CSV
-                    <input type="file" id="fileInput" accept=".csv" hidden>
-                </label>
-                <button class="btn btn-primary" onclick="exportData()">📤 导出数据</button>
-                <button class="btn btn-ghost" onclick="showDeleteLogs()">🗑️ 删除记录</button>
-            </div>
+<div class="header">
+    <h1>抽签管理后台</h1>
+    <div class="toolbar">
+        <div class="search-group">
+            <input type="text" id="searchInput" class="search-input" placeholder="输入客户姓名">
+            <button class="btn btn-primary" onclick="searchData()">🔍 搜索</button>
         </div>
-
+        <div class="operation-buttons">
+            <button class="btn btn-primary" onclick="refreshData()">🔄 刷新</button>
+            <label class="btn btn-primary">
+                📥 导入CSV
+                <input type="file" id="fileInput" accept=".csv" hidden>
+            </label>
+            <button class="btn btn-primary" onclick="exportData()">📤 导出</button>
+            <button class="btn btn-danger" onclick="showDeleteLogs()">🗑️ 删除记录</button>
+        </div>
+    </div>
+</div>
         <div class="table-container">
             <div id="importResult"></div>
             <table id="dataTable">
@@ -435,6 +490,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadData();
     setupFileInput();
 });
+
+// 新增全局变量存储原始数据
+let originalData = [];
+
+// 修改后的数据加载函数
+async function loadData() {
+    try {
+        showLoading();
+        const { data, error } = await supabase
+            .from('households')
+            .select(`
+                town,
+                name,
+                is_drawn,
+                draw_results ( team, drawn_at )
+            `)
+            .order('town')
+            .order('name');
+
+        if (error) throw error;
+        
+        originalData = data; // 保存原始数据
+        renderTable(data);
+    } catch (error) {
+        handleError('数据加载', error);
+    } finally {
+        hideLoading();
+    }
+}
 
     // 文件处理
     // 文件输入处理
@@ -547,30 +631,69 @@ function showImportResult(result) {
     document.getElementById('importResult').innerHTML = html;
 }
 
-    // 数据加载
-    async function loadData() {
-        try {
-            showLoading();
-            const { data, error } = await supabase
-                .from('households')
-                .select(`
-                    town,
-                    name,
-                    is_drawn,
-                    draw_results ( team, drawn_at )
-                `)
-                .order('town')
-                .order('name');
+// 添加实时搜索监听（带防抖）
+let searchTimer;
+document.getElementById('searchInput').addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        searchData();
+    }, 300);
+});
 
-            if (error) throw error;
-
-            renderTable(data);
-        } catch (error) {
-            handleError('数据加载', error);
-        } finally {
-            hideLoading();
-        }
+// 修改搜索函数
+function searchData() {
+    const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+    
+    // 当搜索为空时显示原始数据
+    if (!keyword) {
+        renderTable(originalData);
+        return;
     }
+
+    const filteredData = originalData.filter(item => {
+        const searchFields = [
+            item.name,
+            item.town,
+            item.draw_results[0]?.team
+        ].join('|').toLowerCase();
+        
+        return searchFields.includes(keyword);
+    });
+    
+    renderTable(filteredData);
+}
+
+// 增强清除搜索功能
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    searchData(); // 直接调用搜索函数触发空值处理
+}
+
+// 添加输入框实时监听（带空值处理）
+document.getElementById('searchInput').addEventListener('input', function(e) {
+    // 输入变化时自动触发搜索
+    if (this.value.trim() === '') {
+        renderTable(originalData);
+    } else {
+        searchData();
+    }
+});
+
+// 优化后的renderTable函数（添加空状态提示）
+function renderTable(data) {
+    const tbody = document.querySelector('#dataTable tbody');
+    const isEmpty = data.length === 0;
+    
+    tbody.innerHTML = isEmpty ? 
+        `<tr><td colspan="6" class="empty-state">${originalData.length ? '未找到匹配记录' : '暂无数据'}</td></tr>` : 
+        data.map(createTableRow).join('');
+
+    // 更新缓存（当显示原始数据时）
+    if (!document.getElementById('searchInput').value.trim()) {
+        const cacheKey = JSON.stringify(originalData);
+        tableCache.set(cacheKey, tbody.innerHTML);
+    }
+}
 
     function renderTable(data) {
         const tbody = document.querySelector('#dataTable tbody');
@@ -585,16 +708,52 @@ function showImportResult(result) {
                 </span></td>
                 <td>${escapeHTML(result.team || '-')}</td>
                 <td>${result.drawn_at ? new Date(result.drawn_at).toLocaleString() : '-'}</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="btn btn-ghost" onclick="resetStatus('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">重置</button>
-                        <button class="btn btn-primary" onclick="showEditTeamModal('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">修改</button>
-                        <button class="btn btn-danger" onclick="deleteHousehold('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">删除</button>
-                    </div>
-                </td>
+<td>
+    <div class="action-buttons">
+        <button class="btn btn-primary" onclick="showEditTeamModal('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">修改</button>
+        <button class="btn btn-ghost" onclick="resetStatus('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">重置</button>
+        <button class="btn btn-danger" onclick="deleteHousehold('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">删除</button>
+    </div>
+</td>
             </tr>`;
         }).join('');
     }
+
+// 优化表格渲染性能
+const tableCache = new Map();
+function renderTable(data) {
+    const tbody = document.querySelector('#dataTable tbody');
+    const cacheKey = JSON.stringify(data);
+    
+    if (tableCache.has(cacheKey)) {
+        tbody.innerHTML = tableCache.get(cacheKey);
+        return;
+    }
+
+    const html = data.map(item => {
+        const result = item.draw_results[0] || {};
+        return `
+        <tr>
+            <td>${escapeHTML(item.town)}</td>
+            <td>${escapeHTML(item.name)}</td>
+            <td><span class="status ${item.is_drawn ? 'assigned' : 'available'}">
+                ${item.is_drawn ? '已抽签' : '未抽签'}
+            </span></td>
+            <td>${escapeHTML(result.team || '-')}</td>
+            <td>${result.drawn_at ? new Date(result.drawn_at).toLocaleString() : '-'}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="showEditTeamModal('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">修改</button>
+                    <button class="btn btn-ghost" onclick="resetStatus('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">重置</button>
+                    <button class="btn btn-danger" onclick="deleteHousehold('${escapeHTML(item.town)}', '${escapeHTML(item.name)}')">删除</button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+
+    tableCache.set(cacheKey, html);
+    tbody.innerHTML = html;
+}
 
     // 施工队修改功能
     async function showEditTeamModal(town, name) {
